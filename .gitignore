@@ -1,0 +1,10 @@
+
+# Contains all logged csv data
+data/
+
+# Managed by maven for build and test
+target/
+
+# IDE configs
+.vscode/
+

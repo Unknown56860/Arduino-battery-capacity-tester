@@ -2,23 +2,24 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
-#define VOLTAGE_PIN A7
-#define CURRENT_PIN A6
-#define RELAY_PIN 4
+#define VOLTAGE_PIN A7 // Must be an analog pin
+#define CURRENT_PIN A6 // Must be an analog pin
+#define RELAY_PIN 4    // Any digital/analog pin
 #define DISPLAY_ADDRESS 0x3C  // oled address: 0X3C (default) or 0x3D
 
-#define MAX_BATTERY_VOLT 4.2  // Maximum voltage before charging cutoff
-#define MIN_BATTERY_VOLT 2.8  // Minimum voltage before discharging cutoff
+#define MAX_BATTERY_VOLT 4.15  // Maximum voltage before charging cutoff
+#define MIN_BATTERY_VOLT 2.95  // Minimum voltage before discharging cutoff
 
 #define R1 4700  // Resistor between battery +ve and arduino analog's pin
 #define R2 980   // Resistor between arduino's analog pin and ground
 
-#define ACS_STEP_VOLT 0.215 // Voltage increase on arduino's pin for every amp
+#define ACS_STEP_VOLT 0.185 // Voltage increase on arduino's pin for every amp
+// I've used ACS7127 with max rating of 5A.
 
 #define POLL_INTERVAL 1000 // Update data every 1000 ms
 #define SAMPLE_INTERVAL 50 // Take a voltage and currrent sample every 50 ms
 
-#define AREF_VOLT 3.285  // Voltage at the Aref/ref pin of the arduino
+#define AREF_VOLT 3.285  // Voltage at the Aref/ref pin of the arduino (never exceed 5 volts)
 #define ADC_MAX 1023     // Max value of adc
 
 unsigned long poll_interval, sample_interval;
