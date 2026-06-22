@@ -13,24 +13,6 @@ A companion Java application automatically captures serial output and stores mea
 
 ---
 
-## Features
-
-* Battery voltage measurement using an analog voltage divider
-* Current measurement using an ACS712 current sensor
-* Real-time power calculation (Watts)
-* Energy accumulation (Watt-hours)
-* Automatic relay cutoff when voltage exceeds configured limits
-* Configurable charge/discharge voltage thresholds
-* Configurable hardware calibration constants
-* OLED display support using SSD1306 displays
-* Serial telemetry output at 1-second intervals
-* Automatic CSV logging on a computer
-* Automatic serial reconnection handling
-* Automatic log file rotation when the device restarts
-* Buffered disk writes for reduced filesystem overhead
-
----
-
 ## Tech Stack
 
 ### Firmware
@@ -93,15 +75,182 @@ A companion Java application automatically captures serial output and stores mea
         └── Maven build output
 ```
 
-### Key Files
+---
 
-| File                        | Purpose                   |
-| --------------------------- | ------------------------- |
-| `capacity_meter_disp.ino`   | OLED display firmware     |
-| `capacity_meter_serial.ino` | Serial logging firmware   |
-| `SerialListenerApp.java`    | Desktop serial logger     |
-| `pom.xml`                   | Maven build configuration |
-| `Images/wiring-diagram.png` | Hardware wiring reference |
+### Minimum Project Requirements
+
+#### Firmware & Hardware
+
+* Arduino-compatible board with at least two analog inputs
+* ACS712 current sensor
+* Relay module (arduino compatible)
+* 3 resistors (1k, 1k, 5k)
+* Battery with protection circuit
+* Charging module/Load resistors
+* Optional SSD1306 OLED display
+
+#### Desktop Logger (optional)
+
+* Java 21 or newer
+* Maven (for building from source)
+
+---
+
+## Hardware Setup & Calibration
+
+The wiring diagram below shows the reference circuit used by this project.
+
+![Circuit Diagram](./Images/wiring_diagram.png)
+
+---
+
+### Battery Capacity Test While Charging
+
+For charge-capacity measurements:
+
+1. Connect charger positive directly to battery positive.
+2. Connect charger negative to the relay **NO (Normally Open)** terminal.
+3. The relay and current sensor will monitor and disconnect charging when the configured voltage limit is reached.
+
+---
+
+### Battery Capacity Test While Discharging
+
+For discharge-capacity measurements:
+
+1. Connect the load positive terminal to battery positive.
+2. Connect the load negative terminal to the relay **NO (Normally Open)** terminal.
+3. A **5 Ω / 5 W resistor** is suitable for testing a typical single-cell 3.7 V Li-ion battery.
+
+The relay will disconnect the load when the battery reaches the configured minimum voltage.
+
+---
+
+### Before uploading the firmware:
+
+1. Measure the AREF voltage using a multimeter.
+2. Measure the actual resistor values used in the voltage divider.
+3. Check the linear step voltage per amp of your current sensor.
+4. Check battery minimum and maximum safe voltage.
+5. Double check the wiring and note pin numbers.
+
+Now update these values in code to match your hardware otherwise the data will not be accurate.
+
+**Notes:**
+- Ensure voltage measurement and current sensor are on analog pins.
+- Arduino logs the data at the baudrate of 115200.
+- Serial logger companion is hardcoded for baudrate 115200.
+
+
+---
+
+## Usage
+
+### OLED Display Variant
+
+Upload:
+
+```text
+capacity_meter_disp/capacity_meter_disp.ino
+```
+
+Output:
+![Oled-Image](./Images/disp.jpeg)
+
+---
+
+### Serial Logging Variant
+
+Upload:
+
+```text
+capacity_meter_serial/capacity_meter_serial.ino
+```
+
+Output format:
+
+```text
+volts, amps, watts, watthour
+```
+
+Output in arduino serial monitor:
+
+![Serial output](./Images/serial_raw.png)
+
+---
+
+## Serial logger
+
+The serial logger listens on provided COM port of your pc (windows assumed), logs the data in console and save it if form of csv file inside `Serial_listener/data`
+
+To run the pre-built serial logger jar, you need to have Java installed in your system. And also maven if you want to run java code or build your own jar file.
+
+---
+
+### Run pre-built JAR
+
+Open a command terminal inside `Serial_listener` folder, then run:
+
+```bash
+java -jar Build/serial-listener-1.0-jar-with-dependencies.jar COM5
+```
+
+- Replace `COM5` with the serial port connected to arduino.
+- Use `ctrl + c` to stop the execution of logger.
+
+---
+
+### Run Logger Using Maven
+
+```bash
+mvn clean compile exec:java -Dexec.args="COM5"
+```
+
+---
+
+### Build Standalone JAR
+
+```bash
+mvn clean package
+```
+
+Generated artifact:
+
+```text
+target/serial-listener-1.0-jar-with-dependencies.jar
+```
+
+To run the new jar:
+
+```bash
+java -jar target/serial-listener-1.0-jar-with-dependencies.jar COM5
+```
+
+---
+
+#### Logger output
+
+![Logger output](./Images/serial_logger.png)
+
+---
+
+### CSV Output
+
+Generated files are stored in:
+
+```text
+Serial_listener/data/
+```
+
+Format:
+
+```csv
+timestamp,volts,amps,watt,watthour
+2026-06-22 01:09:13,3.95,0.72,2.84,0.12
+```
+
+CSV sample:
+![csv-sample](./Images/csv.png)
 
 ---
 
@@ -129,13 +278,13 @@ Serial --> JavaLogger
 JavaLogger --> CSV
 ```
 
-### Measurement Pipeline
+### Measurement Process
 
 1. The battery voltage is scaled using a resistor divider.
 2. The ACS712 sensor produces an analog voltage proportional to current.
 3. The Arduino samples voltage and current every 50 ms.
 4. Samples are averaged over a 1-second interval.
-5. Firmware calculates:
+5. Arduino calculates:
 
    * Voltage (V)
    * Current (A)
@@ -145,7 +294,7 @@ JavaLogger --> CSV
 
    * Relay is disabled
    * Built-in LED is illuminated
-7. Measurements are either:
+7. Based on uploaded code, measurements are either:
 
    * Displayed on an OLED screen, or
    * Sent over the serial port
@@ -162,255 +311,23 @@ Energy(Wh) += Power × Time(hours)
 
 The accumulated watt-hour value is updated every polling interval.
 
-### Serial Logging Workflow
-
-```mermaid
-sequenceDiagram
-
-Arduino->>Java Logger: START
-Arduino->>Java Logger: volts,amps,watts,watthour
-Arduino->>Java Logger: volts,amps,watts,watthour
-Arduino->>Java Logger: volts,amps,watts,watthour
-
-Java Logger->>Buffer: Store records
-Buffer->>CSV File: Periodic flush
-```
-
-The logger:
-
-* Connects to the configured serial port
-* Waits for device availability
-* Reconnects automatically after disconnects
-* Buffers records in memory
-* Writes CSV batches to disk
-* Creates new log files when the device restarts
-
 ---
 
-
-### Minimum Requirements
-
-#### Firmware
-
-* Arduino-compatible board with at least two analog inputs
-* ACS712 current sensor
-* Relay module (arduino compatible)
-* Voltage divider resistors
-* Optional SSD1306 OLED display
-
-#### Desktop Logger
-
-* Java 21 or newer
-* Maven (for building from source)
-
----
-
-## Usage
-
-### OLED Display Variant
-
-Upload:
-
-```text
-capacity_meter_disp/capacity_meter_disp.ino
-```
-
-The OLED display shows:
-
-* Voltage
-* Current
-* Power
-* Watt-hours
-
----
-
-### Serial Logging Variant
-
-Upload:
-
-```text
-capacity_meter_serial/capacity_meter_serial.ino
-```
-
-The firmware outputs lines in the format:
-
-```text
-volts, amps, watts, watthour
-```
-
-Example:
-
-```text
-3.97, 0.74, 2.93, 1.24
-```
-
----
-
-## Serial logger companion
-
-Open a command terminal inside `Serial_listener` folder, then:
-
-### Run pre-built JAR (only java required)
-
-Run:
-
-```bash
-java -jar Build/serial-listener-1.0-jar-with-dependencies.jar COM5
-```
-
-Use `ctrl + c` to stop the execution of logger.
-
----
-
-### Run Logger Using Maven (java + maven needed)
-
-```bash
-mvn clean compile exec:java -Dexec.args="COM5"
-```
-
-Replace `COM5` with the serial port used by your device.
-
----
-
-### Build Standalone JAR (java + maven needed)
-
-```bash
-mvn clean package
-```
-
-Generated artifact:
-
-```text
-target/serial-listener-1.0-jar-with-dependencies.jar
-```
-
-Run:
-
-```bash
-java -jar target/serial-listener-1.0-jar-with-dependencies.jar COM5
-```
-
----
-
-### CSV Output
-
-Generated files are stored in:
-
-```text
-Serial_listener/data/
-```
-
-CSV format:
-
-```csv
-timestamp,volts,amps,watt,watthour
-2026-06-22 01:09:13,3.95,0.72,2.84,0.12
-```
-
----
-
-## Configuration
-
-All firmware configuration is contained directly in the Arduino source files.
-
-### Voltage Limits
-
-```cpp
-#define MAX_BATTERY_VOLT 4.15
-#define MIN_BATTERY_VOLT 2.95
-```
-
-Used for relay cutoff protection.
-
----
-
-### Voltage Divider
-
-```cpp
-#define R1 4700
-#define R2 980
-```
-
-Must match the actual resistor values used in hardware.
-
----
-
-### Current Sensor
-
-```cpp
-#define ACS_STEP_VOLT 0.185
-```
-
-Configured for an ACS712 5A module.
-
----
-
-### ADC Reference
-
-```cpp
-#define AREF_VOLT 3.285
-```
-
-External analog reference voltage, must not exceed 5 volts.
-
----
-
-### Sampling Settings
-
-```cpp
-#define SAMPLE_INTERVAL 50
-#define POLL_INTERVAL 1000
-```
-
-* Sample every 50 ms
-* Calculate and publish results every 1000 ms or 1 second
-
----
-
-### Hardware Pins
-
-```cpp
-#define VOLTAGE_PIN A7
-#define CURRENT_PIN A6
-#define RELAY_PIN   4
-```
-
-Modify as required for the target board.
-
----
-
-### OLED Configuration
-
-```cpp
-#define DISPLAY_ADDRESS 0x3C
-```
-
-SSD1306 I²C address.
-
----
-
-### Java Logger Configuration
-
-Located in `SerialListenerApp.java`.
-
-| Setting         | Value       |
-| --------------- | ----------- |
-| Baud Rate       | 115200      |
-| Flush Threshold | 100 records |
-| Flush Interval  | 10 seconds  |
-| Data Directory  | `./data`    |
-
----
-
-## Images
-
-The repository includes reference images:
-
-* `Images/wiring_diagram.png` – Circuit wiring diagram
-* `Images/disp.jpeg` – OLED display example
-* `Images/serial_logger.png` – Serial output from logger example
-* `Images/serial_raw.png` – Serial output from arduino example
-* `Images/csv.png` – CSV logging example
+## Features
+
+* Battery voltage measurement using an analog voltage divider
+* Current measurement using an ACS712 current sensor
+* Real-time power calculation (Watts)
+* Energy accumulation (Watt-hours)
+* Automatic relay cutoff when voltage exceeds configured limits
+* Configurable charge/discharge voltage thresholds
+* Configurable hardware calibration constants
+* OLED display support using SSD1306 displays
+* Serial telemetry output at 1-second intervals
+* Automatic CSV logging on a computer
+* Automatic serial reconnection handling
+* Automatic log file rotation when the device restarts
+* Buffered disk writes for reduced filesystem overhead
 
 ---
 
